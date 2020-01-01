@@ -1,0 +1,4 @@
+real = 1.f
+boolean = true
+integer = 3
+str = "string with an escaped \"substring\""
