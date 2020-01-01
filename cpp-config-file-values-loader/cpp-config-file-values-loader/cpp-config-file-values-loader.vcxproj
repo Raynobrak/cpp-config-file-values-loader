@@ -127,11 +127,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="ValuesLoader.cpp" />
+    <Text Include="values.txt" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="values.txt" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="ValuesLoader.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ValuesLoader.h" />
