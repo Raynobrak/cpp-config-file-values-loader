@@ -104,6 +104,11 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 		return;
 	}
 
+	if (lines.empty()) {
+		errors_.push_back("The file '" + filename + "' is empty.");
+		return;
+	}
+
 	for (size_t i = 0; i < lines.size(); ++i) {
 		auto& line = lines[i];
 
@@ -111,69 +116,60 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 			continue;
 		}
 
-		auto lineNumber = std::to_string(i + 1);
+		auto lnNumber = i + 1;
 
 		auto parts = splitString(line, CHR_IDENTIFIER_AND_VALUE_DELIMITER);
-		if (parts.size() < 2) {
-			errors_.push_back("Missing '=' symbol at line " + lineNumber + ".");
+		if (parts.size() == 1) {
+			addError(lnNumber, "Missing '=' symbol.");
 			continue;
 		}
 		else if (parts.size() > 2) {
-			errors_.push_back("Too many '=' symbols at line " + lineNumber + ".");
+			addError(lnNumber, "Too many '=' symbols.");
 			continue;
 		}
 
 		std::string identifier = trimString(parts[0], ' ');
 		if (identifier.empty()) {
-			errors_.push_back("No identifier found at line " + lineNumber + ".");
+			addError(lnNumber, "No identifier found.");
 			continue;
 		}
 
 		if(!isIdentifierValid(identifier)) {
-			errors_.push_back("Identifier '" + identifier + "' is unexpected at line " + lineNumber + " because it has not been defined in the values formats.");
+			addError(lnNumber, "Identifier '" + identifier + "' is unexpected because it has not been defined in the values formats.");
 			continue;
 		}
 
 		if (isAlreadyDefined(identifier)) {
-			errors_.push_back("Identifier '" + identifier + "' is unexpected at line " + lineNumber + " because it has already been defined previously in the file.");
+			addError(lnNumber, "Identifier '" + identifier + "' has already been defined previously in the file.");
 			continue;
 		}
 
 		std::string rawValue = parts[1];
 
+		ValType t = static_cast<ValType>(8);
+
 		auto valueType = getExpectedTypeOf(identifier);
 		switch (valueType)
 		{
 		case ValType::Integer:
-			if (!tryToParseInteger(identifier, rawValue)) {
-				errors_.push_back("Could not interpret integer at line " + lineNumber + ".");
-				continue;
-			}
+			tryToParseInteger(identifier, rawValue, lnNumber);
 			break;
 		case ValType::Float:
-			if (!tryToParseFloat(identifier, rawValue)) {
-				errors_.push_back("Could not interpret float at line " + lineNumber + ".");
-				continue;
-			}
+			tryToParseFloat(identifier, rawValue, lnNumber);
+
 			break;
 		case ValType::Boolean:
-			if (!tryToParseBoolean(identifier, rawValue)) {
-				errors_.push_back("Could not interpret boolean at line " + lineNumber + ".");
-				continue;
-			}
+			tryToParseBoolean(identifier, rawValue, lnNumber);
+
 			break;
 		case ValType::String:
-			if (!tryToParseString(identifier, rawValue)) {
-				errors_.push_back("Could not interpret string at line " + lineNumber + ".");
-				continue;
-			}
+			tryToParseString(identifier, rawValue, lnNumber);
 			break;
 		default:
-			throw std::logic_error("The value type was not recognised as a valid type.");
+			throw std::logic_error("The value type is not a valid type.");
 			break;
 		}
 	}
-
 }
 
 bool ValuesLoader::everythingIsFine() const {
@@ -207,7 +203,7 @@ ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
 	throw std::invalid_argument("The given identifier does not exist.");
 }
 
-bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValue) {
+bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValue, int currentLine) {
 	rawValue = trimString(rawValue, ' ');
 
 	try {
@@ -216,16 +212,16 @@ bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValu
 		return true;
 	}
 	catch (std::invalid_argument) {
-		errors_.push_back("'" + rawValue + "' is not a valid integer value.");
+		addError(currentLine, "'" + rawValue + "' is not a valid integer value.");
 	}
 	catch (std::out_of_range) {
-		errors_.push_back("'" + rawValue + "' is too big or too small for an integer.");
+		addError(currentLine, "'" + rawValue + "' is too big or too small for an integer.");
 	}
 
 	return false;
 }
 
-bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue) {
+bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue, int currentLine) {
 	rawValue = trimString(rawValue, ' ');
 	
 	try {
@@ -234,16 +230,16 @@ bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue)
 		return true;
 	}
 	catch (std::invalid_argument) {
-		errors_.push_back("'" + rawValue + "' is not a valid floating-point value.");
+		addError(currentLine, "'" + rawValue + "' is not a valid floating-point value.");
 	}
 	catch (std::out_of_range) {
-		errors_.push_back("'" + rawValue + "' is too big or too small for a floating-point.");
+		addError(currentLine, "'" + rawValue + "' is too big or too small for a floating-point.");
 	}
 
 	return false;
 }
 
-bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValue) {
+bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValue, int currentLine) {
 	rawValue = trimString(rawValue, ' ');
 	bool determinedValue;
 	if (rawValue == "0" || rawValue == "false") {
@@ -253,7 +249,7 @@ bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValu
 		determinedValue = true;
 	}
 	else {
-		errors_.push_back("'" + rawValue + "' is not a valid boolean value.");
+		addError(currentLine, "'" + rawValue + "' is not a valid boolean value.");
 		return false;
 	}
 
@@ -261,12 +257,12 @@ bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValu
 	return true;
 }
 
-bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue) {
+bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue, int currentLine) {
 
 	// check if there is at least 2 string delimiters (there might be more, if they are escaped like so : "text \" text")
 	if (numberOfNonEscapedCharactersInString(rawValue, STRING_DELIMITER, ESCAPE_CHARACTER) >= 2) {
 
-		// we don't check if first exists because it is forced to. If it wasn't it would mean that numberOfNonEscapedCharactersInString didn't return the truth.
+		// we don't check if 'first' exists because it is forced to. If it wasn't it would mean that numberOfNonEscapedCharactersInString didn't return the truth.
 		auto first = findFirstNonEscapedChar(rawValue.begin(), rawValue.end(), STRING_DELIMITER, ESCAPE_CHARACTER);
 		auto second = findFirstNonEscapedChar(first + 1, rawValue.end(), STRING_DELIMITER, ESCAPE_CHARACTER);
 
@@ -280,6 +276,10 @@ bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue
 	else {
 		return false;
 	}
+}
+
+void ValuesLoader::addError(int line, std::string message) {
+	errors_.push_back("[ln " + std::to_string(line) + "]\t: " + message);
 }
 
 void ValuesLoader::storeValue(std::string identifier, expectable_types value) {

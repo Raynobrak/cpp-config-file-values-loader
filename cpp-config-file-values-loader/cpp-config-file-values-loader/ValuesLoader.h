@@ -35,10 +35,12 @@ private:
 	// Returns the type expected for a given identifier. This method expects that the given identifier has been checked for existence with isIdentifierValid().
 	ValType getExpectedTypeOf(const std::string& identifier) const;
 
-	bool tryToParseInteger(std::string identifier, std::string rawValue);
-	bool tryToParseFloat(std::string identifier, std::string rawValue);
-	bool tryToParseBoolean(std::string identifier, std::string rawValue);
-	bool tryToParseString(std::string identifier, std::string rawValue);
+	bool tryToParseInteger(std::string identifier, std::string rawValue, int currentLine);
+	bool tryToParseFloat(std::string identifier, std::string rawValue, int currentLine);
+	bool tryToParseBoolean(std::string identifier, std::string rawValue, int currentLine);
+	bool tryToParseString(std::string identifier, std::string rawValue, int currentLine);
+
+	void addError(int line, std::string message);
 
 	using expectable_types = std::variant<int, float, bool, std::string>;
 	void storeValue(std::string identifier, expectable_types value);
