@@ -45,13 +45,13 @@ private:
 
 	std::vector<ValueFormat> valuesFormats_;
 	std::vector<std::string> errors_;
-	std::map<std::string, expectable_types> values_;
+	std::map<std::string, expectable_types> definedValues_;
 };
 
 template<typename T>
 inline T ValuesLoader::getValue(std::string identifier) const {
 	try {
-		auto variant = values_.at(identifier);
+		auto variant = definedValues_.at(identifier);
 		return std::get<T>(variant);
 	}
 	catch (const std::out_of_range& exception) {

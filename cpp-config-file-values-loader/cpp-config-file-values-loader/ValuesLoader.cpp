@@ -177,7 +177,7 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 }
 
 bool ValuesLoader::everythingIsFine() const {
-	return errors_.empty() && values_.size() == valuesFormats_.size();
+	return errors_.empty() && definedValues_.size() == valuesFormats_.size();
 }
 
 std::vector<std::string> ValuesLoader::getErrors() const {
@@ -194,7 +194,7 @@ bool ValuesLoader::isIdentifierValid(const std::string& identifier) const {
 }
 
 bool ValuesLoader::isAlreadyDefined(const std::string& identifier) const {
-	return values_.find(identifier) == values_.end();
+	return definedValues_.find(identifier) != definedValues_.end();
 }
 
 ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
@@ -283,5 +283,5 @@ bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue
 }
 
 void ValuesLoader::storeValue(std::string identifier, expectable_types value) {
-	values_.emplace(identifier, value);
+	definedValues_.emplace(identifier, value);
 }
