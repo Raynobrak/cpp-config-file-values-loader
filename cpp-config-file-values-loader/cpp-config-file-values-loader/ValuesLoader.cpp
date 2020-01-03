@@ -2,13 +2,14 @@
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
-const char CHR_IDENTIFIER_AND_VALUE_DELIMITER = '=';
+const char VALUE_ASSIGNMENT_CHAR = '=';
 const char STRING_DELIMITER = '"';
-const char ESCAPE_CHARACTER = '\\';
+const char ESCAPE_CHAR = '\\';
 
-std::vector<std::string> readAllLines(std::string path, bool& ok) {
-	std::ifstream input(path);
+std::vector<std::string> readLinesFromFile(const std::string& filename, bool& ok) {
+	std::ifstream input(filename);
 
 	std::vector<std::string> content;
 
@@ -38,55 +39,31 @@ std::vector<std::string> splitString(const std::string& str, char delimiter) {
 	return elems;
 }
 
-std::string trimString(std::string str, char toRemove) {
-	for (size_t i = 0; i < str.size(); ++i) {
-		if (str[i] == toRemove) {
-			str.erase(str.begin() + i);
-		}
-	}
-
+std::string trimString(std::string str, char remove = ' ') {
+	str.erase(std::remove(str.begin(), str.end(), remove), str.end());
 	return str;
 }
 
 size_t numberOfCharacterInString(const std::string &str, char toCount) {
-	size_t count = 0;
-	for (const auto& chr : str) {
-		if (chr == toCount)
-			count++;
-	}
-	return count;
+	return std::count(str.begin(), str.end(), toCount);
 }
 
-size_t numberOfNonEscapedCharactersInString(const std::string& str, char toCount, char escapeCharacter) {
+size_t numberOfNonEscapedCharactersInString(const std::string& str, char toCount) {
 	size_t count = 0;
 	for (size_t i = 0; i < str.size(); ++i) {
-		if (str[i] == toCount) {
-			if (i == 0) {
-				count++;
-			}
-			else {
-				if (str[i - 1] != escapeCharacter) {
-					count++;
-				}
-			}
+		if (str[i] == toCount && ((i == 0) || (i > 0 && str[i - 1] != ESCAPE_CHAR))) {
+			count++;
 		}
 	}
 
 	return count;
 }
 
-std::string::iterator findFirstNonEscapedChar(std::string::iterator begin, std::string::iterator end, char toFind, char escapeCharacter) {
+std::string::iterator findFirstNonEscapedChar(std::string::iterator begin, std::string::iterator end, char toFind) {
 	for (size_t i = 0; i < (end - begin); ++i) {
 		char current = *(begin + i);
-		if (current == toFind) {
-			if (i == 0) {
-				return begin + i;
-			}
-			else {
-				if (*(begin + i - 1) != escapeCharacter) {
-					return begin + i;
-				}
-			}
+		if (current == toFind && (i == 0 || (*(begin + i - 1) != ESCAPE_CHAR))) {
+			return begin + i;
 		}
 	}
 
@@ -97,7 +74,7 @@ ValuesLoader::ValuesLoader(std::vector<ValueFormat> valuesFormats) : valuesForma
 
 void ValuesLoader::loadValuesFromFile(std::string filename) {
 	bool fileReadingOk;
-	auto lines = readAllLines(filename, fileReadingOk);
+	auto lines = readLinesFromFile(filename, fileReadingOk);
 
 	if (!fileReadingOk) {
 		errors_.push_back("Could not read content of '" + filename + "'. Check if the file exists and if you are allowed to access it.");
@@ -111,26 +88,30 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 
 	for (size_t i = 0; i < lines.size(); ++i) {
 		auto& line = lines[i];
+		auto lnNumber = i + 1;
 
 		if (line.empty()) {
 			continue;
 		}
 
-		auto lnNumber = i + 1;
-
-		auto parts = splitString(line, CHR_IDENTIFIER_AND_VALUE_DELIMITER);
-		if (parts.size() == 1) {
+		auto valueAssignmentSymbolIndex = line.find(VALUE_ASSIGNMENT_CHAR);
+		if (valueAssignmentSymbolIndex == std::string::npos) {
 			addError(lnNumber, "Missing '=' symbol.");
 			continue;
 		}
-		else if (parts.size() > 2) {
-			addError(lnNumber, "Too many '=' symbols.");
+
+		if (valueAssignmentSymbolIndex == line.size() - 1) {
+			addError(lnNumber, "No value found after the assignment symbol.");
 			continue;
 		}
 
-		std::string identifier = trimString(parts[0], ' ');
+		std::string identifier = line.substr(0, valueAssignmentSymbolIndex);
+		identifier = trimString(identifier);
+
+		std::string rawValue = line.substr(valueAssignmentSymbolIndex + 1);
+
 		if (identifier.empty()) {
-			addError(lnNumber, "No identifier found.");
+			addError(lnNumber, "No identifier found before the assignment symbol.");
 			continue;
 		}
 
@@ -143,8 +124,6 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 			addError(lnNumber, "Identifier '" + identifier + "' has already been defined previously in the file.");
 			continue;
 		}
-
-		std::string rawValue = parts[1];
 
 		ValType t = static_cast<ValType>(8);
 
@@ -204,10 +183,10 @@ ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
 }
 
 bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValue, int currentLine) {
-	rawValue = trimString(rawValue, ' ');
+	std::string trimmedRawValue = trimString(rawValue);
 
 	try {
-		int value = std::stoi(rawValue);
+		int value = std::stoi(trimmedRawValue);
 		storeValue(identifier, value);
 		return true;
 	}
@@ -222,10 +201,10 @@ bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValu
 }
 
 bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue, int currentLine) {
-	rawValue = trimString(rawValue, ' ');
-	
+	std::string trimmedRawValue = trimString(rawValue);
+
 	try {
-		float value = std::stof(rawValue);
+		float value = std::stof(trimmedRawValue);
 		storeValue(identifier, value);
 		return true;
 	}
@@ -240,12 +219,12 @@ bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue,
 }
 
 bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValue, int currentLine) {
-	rawValue = trimString(rawValue, ' ');
+	std::string trimmedRawValue = trimString(rawValue);
 	bool determinedValue;
-	if (rawValue == "0" || rawValue == "false") {
+	if (trimmedRawValue == "0" || trimmedRawValue == "false") {
 		determinedValue = false;
 	}
-	else if (rawValue == "1" || rawValue == "true") {
+	else if (trimmedRawValue == "1" || trimmedRawValue == "true") {
 		determinedValue = true;
 	}
 	else {
@@ -258,16 +237,15 @@ bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValu
 }
 
 bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue, int currentLine) {
-
 	// check if there is at least 2 string delimiters (there might be more, if they are escaped like so : "text \" text")
-	if (numberOfNonEscapedCharactersInString(rawValue, STRING_DELIMITER, ESCAPE_CHARACTER) >= 2) {
+	if (numberOfNonEscapedCharactersInString(rawValue, STRING_DELIMITER) >= 2) {
 
 		// we don't check if 'first' exists because it is forced to. If it wasn't it would mean that numberOfNonEscapedCharactersInString didn't return the truth.
-		auto first = findFirstNonEscapedChar(rawValue.begin(), rawValue.end(), STRING_DELIMITER, ESCAPE_CHARACTER);
-		auto second = findFirstNonEscapedChar(first + 1, rawValue.end(), STRING_DELIMITER, ESCAPE_CHARACTER);
+		auto first = findFirstNonEscapedChar(rawValue.begin(), rawValue.end(), STRING_DELIMITER);
+		auto second = findFirstNonEscapedChar(first + 1, rawValue.end(), STRING_DELIMITER);
 
 		std::string valueBetweenDelimiters = std::string(first + 1, second);
-		valueBetweenDelimiters = trimString(valueBetweenDelimiters, ESCAPE_CHARACTER);
+		valueBetweenDelimiters = trimString(valueBetweenDelimiters, ESCAPE_CHAR);
 
 		storeValue(identifier, valueBetweenDelimiters);
 
