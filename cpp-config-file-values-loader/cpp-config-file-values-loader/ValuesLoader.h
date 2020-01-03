@@ -30,6 +30,7 @@ public:
 	std::vector<std::string> getErrors() const;
 private:
 	bool isIdentifierValid(const std::string& identifier) const;
+	bool isAlreadyDefined(const std::string& identifier) const;
 	
 	// Returns the type expected for a given identifier. This method expects that the given identifier has been checked for existence with isIdentifierValid().
 	ValType getExpectedTypeOf(const std::string& identifier) const;

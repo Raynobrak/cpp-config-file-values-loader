@@ -116,22 +116,27 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 		auto parts = splitString(line, CHR_IDENTIFIER_AND_VALUE_DELIMITER);
 		if (parts.size() < 2) {
 			errors_.push_back("Missing '=' symbol at line " + lineNumber + ".");
-			return;
+			continue;
 		}
 		else if (parts.size() > 2) {
 			errors_.push_back("Too many '=' symbols at line " + lineNumber + ".");
-			return;
+			continue;
 		}
 
 		std::string identifier = trimString(parts[0], ' ');
 		if (identifier.empty()) {
 			errors_.push_back("No identifier found at line " + lineNumber + ".");
-			return;
+			continue;
 		}
 
 		if(!isIdentifierValid(identifier)) {
 			errors_.push_back("Identifier '" + identifier + "' is unexpected at line " + lineNumber + " because it has not been defined in the values formats.");
-			return;
+			continue;
+		}
+
+		if (isAlreadyDefined(identifier)) {
+			errors_.push_back("Identifier '" + identifier + "' is unexpected at line " + lineNumber + " because it has already been defined previously in the file.");
+			continue;
 		}
 
 		std::string rawValue = parts[1];
@@ -142,25 +147,25 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 		case ValType::Integer:
 			if (!tryToParseInteger(identifier, rawValue)) {
 				errors_.push_back("Could not interpret integer at line " + lineNumber + ".");
-				return;
+				continue;
 			}
 			break;
 		case ValType::Float:
 			if (!tryToParseFloat(identifier, rawValue)) {
 				errors_.push_back("Could not interpret float at line " + lineNumber + ".");
-				return;
+				continue;
 			}
 			break;
 		case ValType::Boolean:
 			if (!tryToParseBoolean(identifier, rawValue)) {
 				errors_.push_back("Could not interpret boolean at line " + lineNumber + ".");
-				return;
+				continue;
 			}
 			break;
 		case ValType::String:
 			if (!tryToParseString(identifier, rawValue)) {
 				errors_.push_back("Could not interpret string at line " + lineNumber + ".");
-				return;
+				continue;
 			}
 			break;
 		default:
@@ -186,6 +191,10 @@ bool ValuesLoader::isIdentifierValid(const std::string& identifier) const {
 		}
 	}
 	return false;
+}
+
+bool ValuesLoader::isAlreadyDefined(const std::string& identifier) const {
+	return values_.find(identifier) == values_.end();
 }
 
 ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
