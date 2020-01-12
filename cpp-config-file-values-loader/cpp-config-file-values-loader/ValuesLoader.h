@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <variant>
+#include <stdexcept>
 
 enum class ValType {
 	Integer,
@@ -56,7 +57,7 @@ inline T ValuesLoader::getValue(std::string identifier) const {
 		auto variant = definedValues_.at(identifier);
 		return std::get<T>(variant);
 	}
-	catch (const std::out_of_range& exception) {
+	catch (std::out_of_range) {
 		throw std::invalid_argument("The identifier could not be found. Make sure it is defined in the values formats and check for any typo.");
 	}
 }
