@@ -8,82 +8,73 @@ const char VALUE_ASSIGNMENT_CHAR = '=';
 const char STRING_DELIMITER = '"';
 const char ESCAPE_CHAR = '\\';
 
-std::vector<std::string> readLinesFromFile(const std::string& filename, bool& ok) {
-	std::ifstream input(filename);
+namespace FileUtils {
+	std::vector<std::string> read_lines_from_file(const std::string& filename, bool& ok) {
+		std::ifstream input(filename);
 
-	std::vector<std::string> content;
+		if (!input.good()) {
+			ok = false;
+			return {};
+		}
 
-	if (!input.good()) {
-		ok = false;
+		std::vector<std::string> content;
+
+		std::string line;
+		while (std::getline(input, line)) {
+			content.push_back(line);
+		}
+
+		ok = true;
 		return content;
 	}
-
-	std::string line;
-	while (std::getline(input, line)) {
-		content.push_back(line);
-	}
-
-	ok = true;
-	return content;
 }
 
-std::vector<std::string> splitString(const std::string& str, char delimiter) {
-	std::vector<std::string> elems;
+namespace StrUtils {
+	std::vector<std::string> split_string(const std::string& str, char delimiter) {
+		std::vector<std::string> elems;
 
-	std::stringstream strstream(str);
-	std::string token;
-	while (std::getline(strstream, token, delimiter)) {
-		elems.push_back(token);
-	}
-
-	return elems;
-}
-
-std::string trimString(std::string str, char remove = ' ') {
-	str.erase(std::remove(str.begin(), str.end(), remove), str.end());
-	return str;
-}
-
-size_t numberOfCharacterInString(const std::string &str, char toCount) {
-	return std::count(str.begin(), str.end(), toCount);
-}
-
-size_t numberOfNonEscapedCharactersInString(const std::string& str, char toCount) {
-	size_t count = 0;
-	for (size_t i = 0; i < str.size(); ++i) {
-		if (str[i] == toCount && ((i == 0) || (i > 0 && str[i - 1] != ESCAPE_CHAR))) {
-			count++;
+		std::stringstream strstream(str);
+		std::string token;
+		while (std::getline(strstream, token, delimiter)) {
+			elems.push_back(token);
 		}
+
+		return elems;
 	}
 
-	return count;
-}
+	std::string trim_string(std::string str, char remove = ' ') {
+		str.erase(std::remove(str.begin(), str.end(), remove), str.end());
+		return str;
+	}
 
-std::string::iterator findFirstNonEscapedChar(std::string::iterator begin, std::string::iterator end, char toFind) {
-	for (size_t i = 0; i < (end - begin); ++i) {
-		char current = *(begin + i);
-		if (current == toFind && (i == 0 || (*(begin + i - 1) != ESCAPE_CHAR))) {
-			return begin + i;
+	std::string::iterator find_first_non_escaped_char(std::string::iterator begin, std::string::iterator end, char charToFind) {
+		for (size_t i = 0; i < (end - begin); ++i) {
+			char current = *(begin + i);
+			if (current == charToFind && (i == 0 || (*(begin + i - 1) != ESCAPE_CHAR))) {
+				return begin + i;
+			}
 		}
-	}
 
-	return end;
+		return end;
+	}
 }
 
-ValuesLoader::ValuesLoader(std::vector<ValueFormat> valuesFormats) : valuesFormats_(valuesFormats) {}
+ValuesLoader::ValuesLoader(std::vector<ValFormat> valuesFormats, std::string filename) : 
+	formats_(valuesFormats), 
+	filename_(filename) {}
 
-void ValuesLoader::loadValuesFromFile(std::string filename) {
+bool ValuesLoader::load() {
 	bool fileReadingOk;
-	auto lines = readLinesFromFile(filename, fileReadingOk);
+	auto lines = FileUtils::read_lines_from_file(filename_, fileReadingOk);
 
 	if (!fileReadingOk) {
-		errors_.push_back("Could not read content of '" + filename + "'. Check if the file exists and if you are allowed to access it.");
-		return;
+		errorList_.push_back("Could not read content of '" + filename_ + "'. Check if the file exists and if you are allowed to access it.");
+		return false;
 	}
 
 	if (lines.empty()) {
-		errors_.push_back("The file '" + filename + "' is empty.");
-		return;
+		errorList_.push_back("The file '" + filename_ + "' is empty.");
+		return false;
 	}
 
 	for (size_t i = 0; i < lines.size(); ++i) {
@@ -96,32 +87,32 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 
 		auto valueAssignmentSymbolIndex = line.find(VALUE_ASSIGNMENT_CHAR);
 		if (valueAssignmentSymbolIndex == std::string::npos) {
-			addError(lnNumber, "Missing '=' symbol.");
+			logError(lnNumber, "Missing '=' symbol.");
 			continue;
 		}
 
 		if (valueAssignmentSymbolIndex == line.size() - 1) {
-			addError(lnNumber, "No value found after the assignment symbol.");
+			logError(lnNumber, "No value found after the assignment symbol.");
 			continue;
 		}
 
 		std::string identifier = line.substr(0, valueAssignmentSymbolIndex);
-		identifier = trimString(identifier);
+		identifier = StrUtils::trim_string(identifier);
 
 		std::string rawValue = line.substr(valueAssignmentSymbolIndex + 1);
 
 		if (identifier.empty()) {
-			addError(lnNumber, "No identifier found before the assignment symbol.");
+			logError(lnNumber, "No identifier found before the assignment symbol.");
 			continue;
 		}
 
 		if(!isIdentifierValid(identifier)) {
-			addError(lnNumber, "Identifier '" + identifier + "' is unexpected because it has not been defined in the values formats.");
+			logError(lnNumber, "Identifier '" + identifier + "' is unexpected because it has not been defined in the values formats.");
 			continue;
 		}
 
-		if (isAlreadyDefined(identifier)) {
-			addError(lnNumber, "Identifier '" + identifier + "' has already been defined previously in the file.");
+		if (isDefined(identifier)) {
+			logError(lnNumber, "Identifier '" + identifier + "' has already been defined previously in the file.");
 			continue;
 		}
 
@@ -149,18 +140,18 @@ void ValuesLoader::loadValuesFromFile(std::string filename) {
 			break;
 		}
 	}
+
+	noteMissingIdentifiers();
+
+	return errorList_.empty();
 }
 
-bool ValuesLoader::everythingIsFine() const {
-	return errors_.empty() && definedValues_.size() == valuesFormats_.size();
-}
-
-std::vector<std::string> ValuesLoader::getErrors() const {
-	return errors_;
+std::vector<std::string> ValuesLoader::getErrorList() const {
+	return errorList_;
 }
 
 bool ValuesLoader::isIdentifierValid(const std::string& identifier) const {
-	for (const auto& value : valuesFormats_) {
+	for (const auto& value : formats_) {
 		if (value.identifier == identifier) {
 			return true;
 		}
@@ -168,12 +159,20 @@ bool ValuesLoader::isIdentifierValid(const std::string& identifier) const {
 	return false;
 }
 
-bool ValuesLoader::isAlreadyDefined(const std::string& identifier) const {
-	return definedValues_.find(identifier) != definedValues_.end();
+bool ValuesLoader::isDefined(const std::string& identifier) const {
+	return identifiersAndValues_.find(identifier) != identifiersAndValues_.end();
+}
+
+void ValuesLoader::noteMissingIdentifiers() {
+	for (const auto& expected : formats_) {
+		if (!isDefined(expected.identifier)) {
+			logError(0, "Identifier '" + expected.identifier + "' is not defined. It is either missing from the file or couldn't be parsed correctly.");
+		}
+	}
 }
 
 ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
-	for (const auto& value : valuesFormats_) {
+	for (const auto& value : formats_) {
 		if (value.identifier == identifier) {
 			return value.type;
 		}
@@ -182,44 +181,52 @@ ValType ValuesLoader::getExpectedTypeOf(const std::string& identifier) const {
 	throw std::invalid_argument("The given identifier does not exist.");
 }
 
+void ValuesLoader::defineIdentifier(std::string identifier, possible_types_variant value) {
+	identifiersAndValues_.emplace(identifier, value);
+}
+
+void ValuesLoader::logError(int line, std::string message) {
+	errorList_.push_back("[ln " + std::to_string(line) + "]\t: " + message);
+}
+
 bool ValuesLoader::tryToParseInteger(std::string identifier, std::string rawValue, int currentLine) {
-	std::string trimmedRawValue = trimString(rawValue);
+	std::string trimmedRawValue = StrUtils::trim_string(rawValue);
 
 	try {
 		int value = std::stoi(trimmedRawValue);
-		storeValue(identifier, value);
+		defineIdentifier(identifier, value);
 		return true;
 	}
 	catch (std::invalid_argument) {
-		addError(currentLine, "'" + rawValue + "' is not a valid integer value.");
+		logError(currentLine, "'" + rawValue + "' is not a valid integer value.");
 	}
 	catch (std::out_of_range) {
-		addError(currentLine, "'" + rawValue + "' is too big or too small for an integer.");
+		logError(currentLine, "'" + rawValue + "' is too big or too small for an integer.");
 	}
 
 	return false;
 }
 
 bool ValuesLoader::tryToParseFloat(std::string identifier, std::string rawValue, int currentLine) {
-	std::string trimmedRawValue = trimString(rawValue);
+	std::string trimmedRawValue = StrUtils::trim_string(rawValue);
 
 	try {
 		float value = std::stof(trimmedRawValue);
-		storeValue(identifier, value);
+		defineIdentifier(identifier, value);
 		return true;
 	}
 	catch (std::invalid_argument) {
-		addError(currentLine, "'" + rawValue + "' is not a valid floating-point value.");
+		logError(currentLine, "'" + rawValue + "' is not a valid floating-point value.");
 	}
 	catch (std::out_of_range) {
-		addError(currentLine, "'" + rawValue + "' is too big or too small for a floating-point.");
+		logError(currentLine, "'" + rawValue + "' is too big or too small for a floating-point.");
 	}
 
 	return false;
 }
 
 bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValue, int currentLine) {
-	std::string trimmedRawValue = trimString(rawValue);
+	std::string trimmedRawValue = StrUtils::trim_string(rawValue);
 	bool determinedValue;
 	if (trimmedRawValue == "0" || trimmedRawValue == "false") {
 		determinedValue = false;
@@ -228,38 +235,31 @@ bool ValuesLoader::tryToParseBoolean(std::string identifier, std::string rawValu
 		determinedValue = true;
 	}
 	else {
-		addError(currentLine, "'" + rawValue + "' is not a valid boolean value.");
+		logError(currentLine, "'" + rawValue + "' is not a valid boolean value.");
 		return false;
 	}
 
-	storeValue(identifier, determinedValue);
+	defineIdentifier(identifier, determinedValue);
 	return true;
 }
 
 bool ValuesLoader::tryToParseString(std::string identifier, std::string rawValue, int currentLine) {
-	// check if there is at least 2 string delimiters (there might be more, if they are escaped like so : "text \" text")
-	if (numberOfNonEscapedCharactersInString(rawValue, STRING_DELIMITER) >= 2) {
+	auto first = StrUtils::find_first_non_escaped_char(rawValue.begin(), rawValue.end(), STRING_DELIMITER);
 
-		// we don't check if 'first' exists because it is forced to. If it wasn't it would mean that numberOfNonEscapedCharactersInString didn't return the truth.
-		auto first = findFirstNonEscapedChar(rawValue.begin(), rawValue.end(), STRING_DELIMITER);
-		auto second = findFirstNonEscapedChar(first + 1, rawValue.end(), STRING_DELIMITER);
-
-		std::string valueBetweenDelimiters = std::string(first + 1, second);
-		valueBetweenDelimiters = trimString(valueBetweenDelimiters, ESCAPE_CHAR);
-
-		storeValue(identifier, valueBetweenDelimiters);
-
-		return true;
-	}
-	else {
+	if (first == rawValue.end())
 		return false;
-	}
+
+	auto second = StrUtils::find_first_non_escaped_char(first + 1, rawValue.end(), STRING_DELIMITER);
+
+	if (second == rawValue.end())
+		return false;
+
+	std::string valueBetweenDelimiters = std::string(first + 1, second);
+
+	valueBetweenDelimiters = StrUtils::trim_string(valueBetweenDelimiters, ESCAPE_CHAR);
+
+	defineIdentifier(identifier, valueBetweenDelimiters);
+
+	return true;
 }
 
-void ValuesLoader::addError(int line, std::string message) {
-	errors_.push_back("[ln " + std::to_string(line) + "]\t: " + message);
-}
-
-void ValuesLoader::storeValue(std::string identifier, expectable_types value) {
-	definedValues_.emplace(identifier, value);
-}

@@ -13,48 +13,54 @@ enum class ValType {
 	String
 };
 
-struct ValueFormat {
+struct ValFormat {
 	std::string identifier;
 	ValType type;
 };
 
 class ValuesLoader
 {
-public:
-	ValuesLoader(std::vector<ValueFormat> valuesFormats);
-	void loadValuesFromFile(std::string filename);
-	bool everythingIsFine() const;
+public: // Public member functions
+
+	ValuesLoader(std::vector<ValFormat> valuesFormats, std::string filename);
 
 	template<typename T>
-	T getValue(std::string identifier) const;
+	T getValue(const std::string& identifier) const;
 
-	std::vector<std::string> getErrors() const;
-private:
+	bool load();
+
+	std::vector<std::string> getErrorList() const;
+
+private: // Private member functions
 	bool isIdentifierValid(const std::string& identifier) const;
-	bool isAlreadyDefined(const std::string& identifier) const;
+	bool isDefined(const std::string& identifier) const;
+	void noteMissingIdentifiers();
 	
 	// Returns the type expected for a given identifier. This method expects that the given identifier has been checked for existence with isIdentifierValid().
 	ValType getExpectedTypeOf(const std::string& identifier) const;
+
+	using possible_types_variant = std::variant<int, float, bool, std::string>;
+
+	void defineIdentifier(std::string identifier, possible_types_variant value);
+
+	void logError(int line, std::string message);
 
 	bool tryToParseInteger(std::string identifier, std::string rawValue, int currentLine);
 	bool tryToParseFloat(std::string identifier, std::string rawValue, int currentLine);
 	bool tryToParseBoolean(std::string identifier, std::string rawValue, int currentLine);
 	bool tryToParseString(std::string identifier, std::string rawValue, int currentLine);
 
-	void addError(int line, std::string message);
-
-	using expectable_types = std::variant<int, float, bool, std::string>;
-	void storeValue(std::string identifier, expectable_types value);
-
-	std::vector<ValueFormat> valuesFormats_;
-	std::vector<std::string> errors_;
-	std::map<std::string, expectable_types> definedValues_;
+private: // Private member variables
+	std::vector<ValFormat> formats_;
+	std::string filename_;
+	std::map<std::string, possible_types_variant> identifiersAndValues_;
+	std::vector<std::string> errorList_;
 };
 
 template<typename T>
-inline T ValuesLoader::getValue(std::string identifier) const {
+inline T ValuesLoader::getValue(const std::string& identifier) const {
 	try {
-		auto variant = definedValues_.at(identifier);
+		auto variant = identifiersAndValues_.at(identifier);
 		return std::get<T>(variant);
 	}
 	catch (std::out_of_range) {

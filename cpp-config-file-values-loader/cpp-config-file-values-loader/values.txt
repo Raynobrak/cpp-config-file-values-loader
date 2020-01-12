@@ -1,4 +1,30 @@
-real = 1.f
-boolean = true
-integer = 3
-str = "string with an escaped \"substring\""
+real1 = 1.5f
+real2 = 3
+real3 = -3.67
+invalid_real = "string"
+
+boolean1 = true
+boolean2 = false
+boolean3 = 1
+boolean4 = 0
+invalid_boolean = "string ="
+
+integer1 = 3
+integer2 = 3.0
+invalid_integer = "123"
+
+str1 = "string with an escaped \"substring\""
+str2 = "string with an '=' symbol"
+str3 =
+= something
+ = something but with a space before
+          str4    = "lot   of   spaces"
+
+empty_string = ""
+
+real1 = 4.f;
+notdefined = "str"
+
+missing symbol
+
+str5 = "\"\"\"\"\""
